@@ -34,11 +34,11 @@ help_msg() {
         echo "HAR RCA Data [pruner task 132] was the last completed task when the"
         echo "maint_daily pid disappeared, it generates an alert via the API"
         echo ; echo "Installation:"
-        echo "  1. In the \"REQUIRED VARIABLES\" section:"
-        echo "     a. Set the API_USER and API_PASS variables in this script to an account that can post to the API"
-        echo "     b. Set the DEV_ID to the device ID to which this alert should be associated (currently $DEV_ID)" 
-        echo "  2. Add the following line to /etc/crontab:"
-        echo "     * * * * * root $(readlink -f "$0")"
+        echo "  The installation process will prompt for the primary DB IP address if this is a secondary node."
+        echo "  You will be asked to provide a device ID to which alerts should be sent, this is usually the cluster device."
+        echo "  The device ID must be numeric, not the name."
+        echo "  The job will be entered into cron without the logging option. You can add it yourself, if necessary, but"
+        echo "  there is no log rotation and this will make at least one entry per minute, so be wary."
         echo 
 }
 
