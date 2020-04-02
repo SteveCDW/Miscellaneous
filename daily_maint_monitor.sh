@@ -57,8 +57,8 @@ perform_install () {
                 read -p "MySQL not running. If this is a secondary DB, please enter the IP address of the primary DB: " PRIMARY_IP
                 [[ $PRIMARY_IP ]] && MYSQL_OPT="-h $PRIMARY_IP"
         fi
-
         [[ $(id -u) -ne 0 ]] && echo "Installation must be run as root" && echo && exit 1 
+        chmod +x $(readlink -f "$0")
         [[ $(grep ^API_USER $0 | grep PLEASE_DEFINE | wc -l) -ne 1 || $(grep ^DEV_ID $0 | grep PLEASE_DEFINE | wc -l) -ne 1 ]] && echo "Looks like this has already been installed. Please obtain a fresh copy of the base script and try again." && echo && exit 1
         [[ $(grep "$(readlink -f "$0")" /etc/crontab | wc -l) -gt 0 ]] && echo "Script already found in /etc/crontab. Remove before running installation again." && exit 1
         # GET MY ID
