@@ -108,7 +108,7 @@ generate_api_alert() {
 
 while getopts "ilhv" opt ; do
         case $opt in
-                "i") validation ; perform_install ;;
+                "i") perform_install ;;
                 "l") ENABLE_LOGGING=1 ;;
                 "h") help_msg ; exit 0 ;;
                 "v") echo "$0, version $VER" ; echo ; exit 0 ;;
