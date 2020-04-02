@@ -3,9 +3,9 @@
 # Author: Steve Chapman [stevcha@cdw.com]
 #
 # New in:
-#  1.0 [01/04/20] - initial release 1 Apr 2020
+#  1.0 [01/04/20] - initial release
 #  1.1 [02/04/20] - Added log message if Daily Maintenance completes successfully
-#                 - Added installation procedure 2 Apr 2020
+#                 - Added installation procedure
 #
 VER="1.1"
 LOCKFILE="/var/run/daily_maint_monitor.lock"
