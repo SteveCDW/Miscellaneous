@@ -68,15 +68,14 @@ perform_install () {
         APP_ID=$(/opt/em7/bin/silo_mysql $MYSQL_OPT -NBe "SELECT id FROM master.system_settings_licenses WHERE ip=\"$APP_IP\"")
         API_USR_ID=$(/opt/em7/bin/silo_mysql $MYSQL_OPT -NBe "SELECT api_internal_account FROM master.system_settings_core")
         API_USR_ACCT="${API_USR_ID},${APP_ID},$(echo -n ${API_USR_ID}_SILO_API_INTERNAL_${APP_ID} | md5sum | awk {'print $1'}):"
-        sed -i "s/API_USER=\"{PLEASE_DEFINE}\"/API_USER=\"${API_USR_ACCT}\"/" $0
         # GET DID
         while [ ! $ALIGN_DID ] ; do
                 read -p "To which device ID should alerts be posted: " ALIGN_DID
                 [[ $ALIGN_DID ]] && [[ $(silo_mysql $MYSQL_OPT -NBe "SELECT COUNT(id) FROM master_dev.legend_device WHERE id=$ALIGN_DID") -ne 1 ]] && echo "DID not found. Try again." && unset ALIGN_DID
         done
         echo "Configuring alerts to be associated with DID $ALIGN_DID"
-        sed -i "s/API_USER=\"{PLEASE_DEFINE}\"/API_USER=\"${API_USR_ACCT}\"/" $0
-        sed -i "s/DEV_ID={PLEASE_DEFINE}/DEV_ID=$ALIGN_DID/" $0
+        sed -i "19s/API_USER=\"{PLEASE_DEFINE}\"/API_USER=\"${API_USR_ACCT}\"/" $0
+        sed -i "20s/DEV_ID={PLEASE_DEFINE}/DEV_ID=$ALIGN_DID/" $0
         # Add to cron
         echo "Adding script to cron"
         echo "* * * * * root $(readlink -f "$0")" >> /etc/crontab
