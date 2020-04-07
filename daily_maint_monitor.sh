@@ -99,7 +99,7 @@ generate_api_alert() {
         echo "  \"aligned_resource\":\"\/device\/$DEV_ID\"" >> $JSON_FILE
         echo "}" >> $JSON_FILE
         curl -sk -H "X-em7-beautify-reponse:1" -X POST -H "Content-Type: application/json" -d @${JSON_FILE} -u "${API_USER}:" https://localhost/api/alert > /dev/null 2>&1
-#       rm -f $JSON_FILE
+        rm -f $JSON_FILE
 }
 
 while getopts "ilhv" opt ; do
