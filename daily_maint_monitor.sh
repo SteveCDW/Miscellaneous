@@ -15,8 +15,9 @@ DEV_ID={PLEASE_DEFINE}  # DID of stack device
 #                 - Added installation procedure
 #  1.2 [03/04/20] - Changed Appliance ID finder to use hostname rather than IP
 #                 - Fixed issue where installation script modified too many DEV_ID variables
+#  1.3 [08/04/20] - Fixed typo in alert message
 #
-VER="1.2"
+VER="1.3"
 LOCKFILE="/var/run/daily_maint_monitor.lock"
 LOG_FILE="/root/daily_maint_monitor.log"
 JSON_FILE="/root/daily_maint_monitor.json"
@@ -124,7 +125,8 @@ if [ -f $LOCKFILE ] ; then
         LAST_CHECK=$(/opt/em7/bin/silo_mysql -NBe "SELECT p_id FROM master_logs.pruner_log WHERE date_end != '' ORDER BY date_start DESC, p_id DESC LIMIT 1")
         log_it "Last Check: $LAST_CHECK"
         if [ $LAST_CHECK -ne 132 ] ; then
-                FAILED_TASK="$(/opt/em7/bin/silo_mysql -NBe "SELECT CONCAT(name,' [',ret_id,']') FROM master.system_settings_retention ret_id=$((LAST_CHECK+1))")"
+                FAILED_TASK="$(/opt/em7/bin/silo_mysql -NBe "SELECT CONCAT(name,' [',ret_id,']') FROM master.system_settings_retention WHERE ret_id=$((LAST_CHECK+1))")"
+                log_it "Daily Maintenance process failed on task $FAILED_TASK"
                 API_MSG="Daily Maintenance process failed on task $FAILED_TASK" 
         else
                 log_it "Daily Maintenance completed successfully"
