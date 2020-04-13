@@ -16,19 +16,21 @@ DEV_ID={PLEASE_DEFINE}  # DID of stack device
 #  1.2 [03/04/20] - Changed Appliance ID finder to use hostname rather than IP
 #                 - Fixed issue where installation script modified too many DEV_ID variables
 #  1.3 [08/04/20] - Fixed typo in alert message
+#  1.4 [10/04/20] - Enable logging levels
+#                 - Fixed issue where script generated multiple API messages
 #
-VER="1.3"
+VER="1.4"
+LOG_LEVEL=0
 LOCKFILE="/var/run/daily_maint_monitor.lock"
 LOG_FILE="/root/daily_maint_monitor.log"
 JSON_FILE="/root/daily_maint_monitor.json"
-PROC_PID=$(ps ax | grep maint_daily | grep -v grep | awk {'print $1'} | tail -1)
 MFP="$(readlink -f "$0")"
 
 help_msg() {
         echo ; echo "Usage: $MFP [-i] [-l] [-h] [-v]"
         echo "where: "
         echo "  -i = install"
-        echo "  -l = enable logging to $LOG_FILE"
+        echo "  -l = enable logging to $LOG_FILE (logging levels from 1 to 3, based on the number of calls for this option (ie. \"-lll\" or \"-l -l -l\")"
         echo "  -h = help (what you're reading now)"
         echo "  -v = show version number (this is version ${VER}, just in case)"
         echo ; echo "Purpose:"
@@ -40,18 +42,18 @@ help_msg() {
         echo "  The installation process will prompt for the primary DB IP address if this is a secondary node."
         echo "  You will be asked to provide a device ID to which alerts should be sent, this is usually the cluster device."
         echo "  The device ID must be numeric, not the name."
-        echo "  The job will be entered into cron without the logging option. You can add it yourself, if necessary, but"
-        echo "  there is no log rotation and this will make at least one entry per minute, so be wary."
+        echo "  The job will be entered into cron with logging level 1. You can change it yourself, if necessary, but"
+        echo "  there is no log rotation, so be wary."
         echo 
 }
 
 log_it() {
-        [[ $ENABLE_LOGGING ]] && echo "[$(date +"%Y-%m-%d %H:%M:%S")] $1" >> $LOG_FILE
+        (($LOG_LEVEL > 0 && $1 <= $LOG_LEVEL)) && echo "[$(date +"%Y-%m-%d %H:%M:%S")] $2" >> $LOG_FILE
 }
 
 validation() {
         MYSQL_CHECK=$(/opt/em7/bin/silo_mysql -NBe "SELECT 1" 2>/dev/null)
-        [ ! $MYSQL_CHECK ] && log_it "MySQL not running. Cancelling this session." && exit 0
+        [ ! $MYSQL_CHECK ] && log_it 2 "MySQL not running. Cancelling this session." && exit 0
 }
 
 perform_install() {
@@ -65,8 +67,8 @@ perform_install() {
         [[ $(grep ^API_USER $MFP | grep PLEASE_DEFINE | wc -l) -ne 1 || $(grep ^DEV_ID $MFP | grep PLEASE_DEFINE | wc -l) -ne 1 ]] && echo "Looks like this has already been installed. Please obtain a fresh copy of the base script and try again." && echo && exit 1
         [[ $(grep "${MFP}" /etc/crontab | wc -l) -gt 0 ]] && echo "Script already found in /etc/crontab. Remove before running installation again." && exit 1
         # GET MY ID
-        echo "Beginning installation"
-        log_it "Getting API account info"
+        log_it 1 "Beginning installation" && echo "Beginning installation"
+        log_it 2 "Getting API account info"
         APP_ID=$(/opt/em7/bin/silo_mysql $MYSQL_OPT -NBe "SELECT id FROM master.system_settings_licenses WHERE name=\"$(hostname)\"")
         while [ ! $APP_ID ] ; do 
                 read -p "Unable to determine Appliance ID. Please add it now: " APP_ID
@@ -83,14 +85,15 @@ perform_install() {
         sed -i "5s/API_USER=\"{PLEASE_DEFINE}\"/API_USER=\"${API_USR_ACCT}\"/" $MFP
         sed -i "6s/DEV_ID={PLEASE_DEFINE}/DEV_ID=$ALIGN_DID/" $MFP
         # Add to cron
-        echo "Adding script to cron"
-        echo "* * * * * root $MFP" >> /etc/crontab
-        echo "Installation complete."
+        log_it 2 "Adding script to cron" && echo "Adding script to cron"
+        echo "* * * * * root $MFP -l" >> /etc/crontab
+        log_it 1 "Installation complete." && echo "Installation complete."
         exit 0
 }
 
 generate_api_alert() {
-        log_it "Generating API Alert" 
+        log_it 1 "Generating API Alert: $API_MSG" 
+        logger "EM7: Generating API Alert - $API_MSG"
         echo "{" > $JSON_FILE
         echo "  \"force_ytype\":\"0\"," >> $JSON_FILE
         echo "  \"force_yid\":\"0\"," >> $JSON_FILE
@@ -106,7 +109,7 @@ generate_api_alert() {
 while getopts "ilhv" opt ; do
         case $opt in
                 "i") perform_install ;;
-                "l") ENABLE_LOGGING=1 ;;
+                "l") LOG_LEVEL=$((LOG_LEVEL+1)) ;;
                 "h") help_msg ; exit 0 ;;
                 "v") echo "$MFP, version $VER" ; echo ; exit 0 ;;
                 *) echo "Invalid option" ; help_msg ; exit 1 ;;
@@ -114,24 +117,36 @@ while getopts "ilhv" opt ; do
 done
 
 validation
-[[ "$API_USER" == "{PLEASE_DEFINE}" ]] && log_it "Installation incomplete" && exit 1
-[[ -f $LOCKFILE ]] && log_it "Already running" && exit 0
-[[ $PROC_PID ]] && echo "$PROC_PID" > $LOCKFILE || log_it "Daily Maint not running"
-if [ -f $LOCKFILE ] ; then
-        log_it "Found Daily Maintenance running on PID $PROC_PID"
-        while [ $(ps ax | grep maint_daily | grep -v grep | awk {'print $1'}| tail -1) -eq $PROC_PID ] ; do
-                sleep 30
-        done
-        LAST_CHECK=$(/opt/em7/bin/silo_mysql -NBe "SELECT p_id FROM master_logs.pruner_log WHERE date_end != '' ORDER BY date_start DESC, p_id DESC LIMIT 1")
-        log_it "Last Check: $LAST_CHECK"
-        if [ $LAST_CHECK -ne 132 ] ; then
-                FAILED_TASK="$(/opt/em7/bin/silo_mysql -NBe "SELECT CONCAT(name,' [',ret_id,']') FROM master.system_settings_retention WHERE ret_id=$((LAST_CHECK+1))")"
-                log_it "Daily Maintenance process failed on task $FAILED_TASK"
-                API_MSG="Daily Maintenance process failed on task $FAILED_TASK" 
-        else
-                log_it "Daily Maintenance completed successfully"
-                API_MSG="Daily Maintenance completed successfully"
-        fi
-        generate_api_alert
-        rm -f $LOCKFILE
+[[ "$API_USER" == "{PLEASE_DEFINE}" ]] && log_it 1 "Installation incomplete" && exit 1
+if [[ -f "$LOCKFILE" ]] ; then
+        log_it 2 "Already running" 
+        exit 0
+else
+        touch $LOCKFILE
 fi
+PROC_PID=$(ps ax | grep maint_daily | grep python | awk {'print $1'})
+if [ $PROC_PID ] ; then
+         echo "$PROC_PID" > $LOCKFILE
+else
+        log_it 2 "Daily Maint not running" 
+        rm -f $LOCKFILE
+        exit 0
+fi
+log_it 2 "Found Daily Maintenance running on PID $PROC_PID"
+while [ $PROC_PID -eq $(cat $LOCKFILE) ] ; do
+        log_it 3 "Daily Maintenance is still running"
+        sleep 30
+        PROC_PID=$(ps ax | grep maint_daily | grep python | awk {'print $1'})
+done
+LAST_CHECK=$(/opt/em7/bin/silo_mysql -NBe "SELECT p_id FROM master_logs.pruner_log WHERE date_end != '' ORDER BY date_start DESC, p_id DESC LIMIT 1")
+log_it 3 "Last Check: $LAST_CHECK"
+if [ $LAST_CHECK -ne 132 ] ; then
+        FAILED_TASK="$(/opt/em7/bin/silo_mysql -NBe "SELECT CONCAT(name,' [',ret_id,']') FROM master.system_settings_retention WHERE ret_id=$((LAST_CHECK+1))")"
+        log_it 2 "Daily Maintenance process failed on task $FAILED_TASK"
+        API_MSG="Daily Maintenance process failed on task $FAILED_TASK" 
+else
+        log_it 2 "Daily Maintenance completed successfully"
+        API_MSG="Daily Maintenance completed successfully"
+fi
+generate_api_alert
+rm -f $LOCKFILE
